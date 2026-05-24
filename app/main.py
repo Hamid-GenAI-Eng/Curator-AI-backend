@@ -10,24 +10,28 @@ app = FastAPI(
     debug=settings.DEBUG
 )
 
-# Set all CORS enabled origins
+# Set robust production CORS configurations
+origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8000",
+    "https://curator-ai-chi.vercel.app",
+    "https://curator-ai-gamma.vercel.app",
+]
+
 if settings.BACKEND_CORS_ORIGINS:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-else:
-    # Default development CORS
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    for o in settings.BACKEND_CORS_ORIGINS:
+        origins.append(str(o).rstrip("/"))
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_origin_regex=r"https://curator-ai-.*\.vercel\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # Include Routers
 app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
