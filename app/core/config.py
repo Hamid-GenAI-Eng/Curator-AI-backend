@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     # App Config
     APP_NAME: str = "AI Note Assistant"
     DEBUG: bool = True
-    SECRET_KEY: str
+    SECRET_KEY: str = "super_secret_dev_key_replace_in_production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     CLOUDINARY_API_SECRET: Optional[str] = None
     
     # AI Configuration (Groq Multimodal Architecture)
-    GROQ_API_KEY: str = Field(..., env="GROQ_API_KEY")
+    GROQ_API_KEY: str = Field("default_key_replace_in_production", env="GROQ_API_KEY")
     LLM_MODEL_NAME: str = "llama-3.3-70b-versatile"
     LLM_BASE_URL: str = "https://api.groq.com/openai/v1"
     
