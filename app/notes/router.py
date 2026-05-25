@@ -82,34 +82,58 @@ async def download_batch_pdf(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Proxy download to bypass CORS and force attachment headers.
+    Generate PDF on the fly dynamically and serve as an attachment download.
     """
     batch_doc = await db.batches.find_one({"_id": batch_id, "user_id": current_user.id})
     if not batch_doc:
-        raise HTTPException(status_code=404, detail="PDF archive not found or not yet generated.")
+        raise HTTPException(status_code=404, detail="Project not found.")
     
     batch_doc["id"] = batch_doc.pop("_id")
     batch = Batch(**batch_doc)
     
-    if not batch or not batch.pdf_url:
-        raise HTTPException(status_code=404, detail="PDF archive not found or not yet generated.")
-
-    async def iter_pdf():
-        async with httpx.AsyncClient() as client:
-            async with client.stream("GET", batch.pdf_url) as r:
-                if r.status_code != 200:
-                    return
-                async for chunk in r.aiter_bytes():
-                    yield chunk
-
-    filename = f"{batch.name or 'note_archive'}.pdf"
-    return StreamingResponse(
-        iter_pdf(),
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"'
-        }
-    )
+    # Fetch all notes linked to this batch in order
+    note_docs = await db.notes.find({"batch_id": batch_id}).sort("created_at", 1).to_list(length=None)
+    for n in note_docs:
+        n["id"] = n.pop("_id")
+    notes = [Note(**n) for n in note_docs]
+    
+    if not notes:
+        raise HTTPException(status_code=400, detail="Cannot generate PDF for an empty project batch.")
+        
+    try:
+        from app.services.batch_service import generate_professional_pdf
+        import os
+        
+        # Compile PDF on the fly
+        pdf_path = generate_professional_pdf(batch.name or "Untitled Note Archive", notes)
+        
+        def iter_pdf(path: str):
+            try:
+                with open(path, "rb") as f:
+                    while chunk := f.read(8192):
+                        yield chunk
+            finally:
+                # Always clean up the temp file after streaming completes!
+                if os.path.exists(path):
+                    try: os.remove(path)
+                    except: pass
+                    
+        filename = f"{batch.name or 'note_archive'}.pdf"
+        # Sanitize filename
+        filename = "".join(c for c in filename if c.isalnum() or c in "._- ")
+        
+        return StreamingResponse(
+            iter_pdf(pdf_path),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Dynamic PDF compilation failed: {str(e)}"
+        )
 
 @router.get("/", response_model=List[schemas.NoteResponse])
 async def get_notes_history(
