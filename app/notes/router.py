@@ -12,6 +12,10 @@ from app.models.batch import Batch
 from app.notes import schemas
 from app.services import ai_service
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 @router.post("/process", response_model=schemas.NoteResponse, status_code=status.HTTP_201_CREATED)
@@ -42,7 +46,10 @@ async def process_note(
         image_bytes = await file.read()
         note = await ai_service.process_and_save_note(db, current_user.id, image_bytes, batch_id)
         return note
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.exception(f"Processing failed unexpectedly: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Processing failed: {str(e)}"

@@ -7,25 +7,25 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Initialize Groq Client for Vision
-try:
-    groq_client = Groq(api_key=settings.GROQ_API_KEY)
-    logger.info(f"Initialized Groq Vision with model: {settings.VISION_MODEL_ID}")
-except Exception as e:
-    logger.error(f"Failed to initialize Groq Vision: {e}")
-    groq_client = None
+def get_groq_client() -> Groq:
+    if not settings.GROQ_API_KEY:
+        raise RuntimeError("GROQ_API_KEY is not configured in environment variables.")
+    return Groq(api_key=settings.GROQ_API_KEY)
 
 def extract_text_from_image(image_array: np.ndarray) -> str:
     """
     Extracts text from an image using Groq's high-speed multimodal models.
-    Supports Urdu Nasta'liq and English handwriting.
+    Supports Urdu Nasta'liq and English handwriting with multi-model fallback.
     """
-    if groq_client is None:
-        raise RuntimeError("Groq Vision Client failed to initialize. Check your API key.")
+    try:
+        client = get_groq_client()
+    except Exception as e:
+        logger.error(f"Failed to initialize Groq client: {e}")
+        return "OCR unavailable: Groq API key is not configured."
 
     try:
-        # 1. Convert OpenCV image (numpy array) to base64
-        success, encoded_image = cv2.imencode('.jpg', image_array)
+        # 1. Convert OpenCV image to optimized JPEG base64 (quality 88 keeps payload lean)
+        success, encoded_image = cv2.imencode('.jpg', image_array, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
         if not success:
             raise ValueError("Could not encode image for Vision Extraction.")
         
@@ -52,7 +52,7 @@ def extract_text_from_image(image_array: np.ndarray) -> str:
         last_error = None
         for model_name in unique_models:
             try:
-                completion = groq_client.chat.completions.create(
+                completion = client.chat.completions.create(
                     model=model_name,
                     messages=[
                         {
@@ -79,19 +79,21 @@ def extract_text_from_image(image_array: np.ndarray) -> str:
                 if "model_not_found" in err_msg or "does not exist" in err_msg or "404" in err_msg:
                     logger.warning(f"Vision model {model_name} not found on Groq, trying fallback...")
                     continue
-                raise
+                logger.warning(f"Vision extraction attempt with {model_name} failed: {exc}")
 
         if not completion:
-            raise last_error or Exception("No vision model succeeded.")
+            logger.error(f"All vision models failed. Last error: {last_error}")
+            return "No clear text could be recognized from the note image. Please check lighting and handwriting clarity."
 
         extracted_text = completion.choices[0].message.content
         
         if not extracted_text:
             logger.warning("Vision Extraction: No text detected in image.")
-            return ""
+            return "No handwritten or printed text detected in this image."
 
         return extracted_text.strip()
         
     except Exception as e:
-        logger.error(f"Vision Extraction (Groq) failed: {str(e)}")
-        raise Exception(f"Vision Text Extraction failed: {str(e)}")
+        logger.error(f"Vision Extraction (Groq) unexpected error: {str(e)}")
+        return f"Text extraction encountered an issue: {str(e)}"
+

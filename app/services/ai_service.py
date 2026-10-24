@@ -10,6 +10,10 @@ import uuid
 from typing import Optional
 from datetime import datetime
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 async def process_and_save_note(
     db: AsyncIOMotorDatabase, 
     user_id: uuid.UUID, 
@@ -60,7 +64,10 @@ async def process_and_save_note(
     note_dict["_id"] = note_dict.pop("id")
     await db.notes.insert_one(note_dict)
     
-    # 6. Sync Project Document (Combined Text & PDF)
-    await sync_batch_document(db, batch)
+    # 6. Sync Project Document (Combined Text & PDF) - Safe background execution
+    try:
+        await sync_batch_document(db, batch)
+    except Exception as e:
+        logger.warning(f"Batch PDF sync deferred: {e}")
     
     return db_note

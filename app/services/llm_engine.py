@@ -1,19 +1,23 @@
-import os
-from openai import OpenAI
+from groq import Groq
 from app.core.config import settings
+import logging
 
-# Initialize the Groq/OpenAI client using settings
-client = None
-if settings.GROQ_API_KEY:
-    client = OpenAI(
-        api_key=settings.GROQ_API_KEY,
-        base_url=settings.LLM_BASE_URL
-    )
+logger = logging.getLogger(__name__)
+
+def get_llm_client():
+    if not settings.GROQ_API_KEY:
+        return None
+    try:
+        return Groq(api_key=settings.GROQ_API_KEY)
+    except Exception as e:
+        logger.error(f"Failed to initialize Groq client in llm_engine: {e}")
+        return None
 
 def refine_handwritten_text(raw_ocr_text: str) -> str:
     """
     Sends raw OCR text to the Groq API for semantic refinement and critical info highlighting.
     """
+    client = get_llm_client()
     if not client:
         return raw_ocr_text 
         
@@ -60,6 +64,7 @@ def generate_batch_name(sample_text: str) -> str:
     """
     Generate a professional, concise title for a project based on its content.
     """
+    client = get_llm_client()
     if not client or not sample_text or len(sample_text) < 10:
         return "New Note Project"
 
