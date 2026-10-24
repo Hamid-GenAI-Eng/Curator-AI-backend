@@ -24,10 +24,18 @@ async def process_note(
     """
     Upload a note and link it to a batch (new or existing).
     """
-    if file.content_type not in ["image/jpeg", "image/png", "image/jpg", "image/webp"]:
+    content_type = (file.content_type or "").lower()
+    filename = (file.filename or "").lower()
+    valid_exts = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".gif")
+    
+    is_valid_image = (
+        content_type.startswith("image/") or
+        any(filename.endswith(ext) for ext in valid_exts)
+    )
+    if not is_valid_image:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid file type."
+            detail=f"Invalid file type '{file.content_type}'. Please upload an image file (PNG, JPG, JPEG, WEBP)."
         )
     
     try:

@@ -38,14 +38,14 @@ db = LazyDB()
 # Dependency to get DB client
 async def get_db():
     global _db
-    try:
-        if _db is None:
+    if _db is None:
+        try:
             get_client()
-        yield _db
-    except Exception as e:
-        logger.error(f"MongoDB connection failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database unavailable: {str(e)}. Please verify your MONGODB_URL environment variable in Atlas/Vercel."
-        )
+        except Exception as e:
+            logger.error(f"MongoDB connection failed: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Database unavailable: {str(e)}. Please verify your MONGODB_URL environment variable in Atlas/Vercel."
+            )
+    yield _db
 
