@@ -32,22 +32,29 @@ def refine_handwritten_text(raw_ocr_text: str) -> str:
     5. OUTPUT: Return ONLY the refined text. No introductory remarks.
     """
 
-    try:
-        completion = client.chat.completions.create(
-            model=settings.LLM_MODEL_NAME,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Handwritten OCR Input:\n{raw_ocr_text}"}
-            ],
-            temperature=0.1,
-            max_tokens=2048
-        )
-        
-        return completion.choices[0].message.content.strip()
-        
-    except Exception as e:
-        print(f"LLM Refinement failed: {str(e)}")
-        return raw_ocr_text
+    models_to_try = [settings.LLM_MODEL_NAME, "qwen/qwen3.8-27b", "openai/gpt-oss-120b"]
+    unique_models = [m for m in dict.fromkeys(models_to_try) if m]
+
+    for model_name in unique_models:
+        try:
+            completion = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Handwritten OCR Input:\n{raw_ocr_text}"}
+                ],
+                temperature=0.1,
+                max_tokens=2048
+            )
+            return completion.choices[0].message.content.strip()
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "model_not_found" in err_msg or "does not exist" in err_msg or "404" in err_msg:
+                continue
+            print(f"LLM Refinement failed with {model_name}: {str(e)}")
+            break
+
+    return raw_ocr_text
 
 def generate_batch_name(sample_text: str) -> str:
     """
@@ -58,16 +65,25 @@ def generate_batch_name(sample_text: str) -> str:
 
     system_prompt = "You are a professional archivist. Summarize the following text into a CONCISE 3-5 word title for a note folder. Be professional. Return ONLY the title."
     
-    try:
-        completion = client.chat.completions.create(
-            model=settings.LLM_MODEL_NAME,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Note Content Sample:\n{sample_text[:1000]}"}
-            ],
-            temperature=0.5,
-            max_tokens=20
-        )
-        return completion.choices[0].message.content.strip().strip('"').strip("'")
-    except Exception:
-        return "Synthesized Note Project"
+    models_to_try = [settings.LLM_MODEL_NAME, "qwen/qwen3.8-27b", "openai/gpt-oss-120b"]
+    unique_models = [m for m in dict.fromkeys(models_to_try) if m]
+
+    for model_name in unique_models:
+        try:
+            completion = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Note Content Sample:\n{sample_text[:1000]}"}
+                ],
+                temperature=0.5,
+                max_tokens=20
+            )
+            return completion.choices[0].message.content.strip().strip('"').strip("'")
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "model_not_found" in err_msg or "does not exist" in err_msg or "404" in err_msg:
+                continue
+            break
+
+    return "Synthesized Note Project"

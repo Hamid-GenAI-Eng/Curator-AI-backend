@@ -41,26 +41,48 @@ def extract_text_from_image(image_array: np.ndarray) -> str:
             "4. BI-LINGUAL: If English words appear in Urdu sentences, transcribe them correctly in place."
         )
         
-        # 3. Call Groq Completion API (Multimodal)
-        completion = groq_client.chat.completions.create(
-            model=settings.VISION_MODEL_ID,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
+        # 3. Call Groq Completion API (Multimodal) with fallback
+        models_to_try = [settings.VISION_MODEL_ID, "qwen/qwen3.8-27b"]
+        unique_models = []
+        for m in models_to_try:
+            if m and m not in unique_models:
+                unique_models.append(m)
+
+        completion = None
+        last_error = None
+        for model_name in unique_models:
+            try:
+                completion = groq_client.chat.completions.create(
+                    model=model_name,
+                    messages=[
                         {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}"
-                            }
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{base64_image}"
+                                    }
+                                }
+                            ]
                         }
-                    ]
-                }
-            ],
-            temperature=0.1,
-            max_tokens=2048,
-        )
+                    ],
+                    temperature=0.1,
+                    max_tokens=2048,
+                )
+                logger.info(f"Vision Extraction (Groq {model_name}): Successfully extracted text.")
+                break
+            except Exception as exc:
+                last_error = exc
+                err_msg = str(exc).lower()
+                if "model_not_found" in err_msg or "does not exist" in err_msg or "404" in err_msg:
+                    logger.warning(f"Vision model {model_name} not found on Groq, trying fallback...")
+                    continue
+                raise
+
+        if not completion:
+            raise last_error or Exception("No vision model succeeded.")
 
         extracted_text = completion.choices[0].message.content
         
@@ -68,7 +90,6 @@ def extract_text_from_image(image_array: np.ndarray) -> str:
             logger.warning("Vision Extraction: No text detected in image.")
             return ""
 
-        logger.info(f"Vision Extraction (Groq {settings.VISION_MODEL_ID}): Successfully extracted text.")
         return extracted_text.strip()
         
     except Exception as e:

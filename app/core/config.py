@@ -35,10 +35,10 @@ class Settings(BaseSettings):
     
     # AI Configuration (Groq Multimodal Architecture)
     GROQ_API_KEY: str = Field("default_key_replace_in_production", env="GROQ_API_KEY")
-    LLM_MODEL_NAME: str = "llama-3.3-70b-versatile"
+    LLM_MODEL_NAME: str = "qwen/qwen3.8-27b"
     LLM_BASE_URL: str = "https://api.groq.com/openai/v1"
     
-    VISION_MODEL_ID: str = "meta-llama/llama-4-scout-17b-16e-instruct"
+    VISION_MODEL_ID: str = "qwen/qwen3.8-27b"
     GOOGLE_API_KEY: Optional[str] = None # No longer required for Vision
     
     # CORS
